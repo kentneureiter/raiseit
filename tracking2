@@ -1,0 +1,178 @@
+import cv2
+import numpy as np
+import os
+from ultralytics import YOLO
+import mediapipe as mp
+import math  # For distance calculation
+import time  # For timeout functionality
+
+FRAME_THRESHOLD = 60  # ~2 seconds at 30 FPS
+COUNTDOWN_THRESHOLD = 30  # frames to count down before removing detection
+TIMEOUT_SECONDS = 10  # Reset frame count after 10 seconds of no progress
+
+# Load models and webcam
+yolo_model = YOLO('yolov8n.pt')
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, model_complexity=1)
+cap = cv2.VideoCapture(0)
+
+# Tracks the people detected in the frame
+tracked_people = []
+
+while cap.isOpened():
+    success, frame = cap.read()
+    if not success:
+        print("Couldn't read from webcam.")
+        break
+
+    current_time = time.time()
+
+    # Run YOLO
+    results = yolo_model(frame)[0]
+    boxes = results.boxes
+
+    # Keep list of current detections
+    current_detections = []
+
+    # Loop over all detected people
+    for i, box in enumerate(boxes):
+        cls_id = int(box.cls[0])
+        if cls_id != 0:
+            continue  # Only "person" class
+
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        padding = 60
+        h, w, _ = frame.shape
+        x1 = max(0, x1)
+        y1 = max(0, y1 - padding)
+        x2 = min(w, x2)
+        y2 = min(h, y2 + padding)
+
+        center_x = int((x1 + x2) / 2)
+        center_y = int((y1 + y2) / 2)
+        current_detections.append({'center': (center_x, center_y), 'hand_raised': False})
+
+        # Crop person
+        person_img = frame[y1:y2, x1:x2]
+        if person_img.size == 0:
+            continue
+
+        person_img = cv2.resize(person_img, (480, 480))
+        rgb_img = cv2.cvtColor(person_img, cv2.COLOR_BGR2RGB)
+        pose_result = pose.process(rgb_img)
+
+        if not pose_result.pose_landmarks:
+            continue
+
+        # Get keypoints
+        landmarks = pose_result.pose_landmarks.landmark
+        left_wrist = landmarks[15].y
+        left_shoulder = landmarks[11].y
+        right_wrist = landmarks[16].y
+        right_shoulder = landmarks[12].y
+
+        # Raise hand condition
+        if left_wrist < left_shoulder or right_wrist < right_shoulder:
+            current_detections[-1]['hand_raised'] = True
+
+    # Update tracked people with improved logic
+    for detection in current_detections:
+        cx, cy = detection['center']
+        hand_raised = detection['hand_raised']
+
+        matched = False
+        for person in tracked_people:
+            dist = math.hypot(cx - person['center'][0], cy - person['center'][1])
+            if dist < 50:
+                person['center'] = (cx, cy)
+                
+                if hand_raised:
+                    # Hand is raised - different behavior based on current state
+                    if person['frames_raised'] < FRAME_THRESHOLD:
+                        # Still building up to detection
+                        person['frames_raised'] += 1
+                        person['last_progress_time'] = current_time
+                    else:
+                        # Already detected, stay at threshold
+                        person['frames_raised'] = FRAME_THRESHOLD
+                    
+                    person['frames_not_raised'] = 0  # Reset countdown
+                    person['state'] = 'raising' if person['frames_raised'] < FRAME_THRESHOLD else 'confirmed'
+                    
+                else:
+                    # Hand is not raised
+                    if person['frames_raised'] >= FRAME_THRESHOLD:
+                        # Already confirmed, start countdown
+                        person['frames_not_raised'] += 1
+                        person['state'] = 'countdown'
+                        
+                        if person['frames_not_raised'] >= COUNTDOWN_THRESHOLD:
+                            # Countdown complete, reset detection
+                            person['frames_raised'] = 0
+                            person['frames_not_raised'] = 0
+                            person['state'] = 'idle'
+                    else:
+                        # Not yet confirmed, check for timeout
+                        if current_time - person.get('last_progress_time', current_time) > TIMEOUT_SECONDS:
+                            # Reset due to timeout
+                            person['frames_raised'] = 0
+                            person['state'] = 'idle'
+                        
+                        person['frames_not_raised'] += 1
+                
+                matched = True
+                break
+
+        if not matched:
+            # New person detected
+            tracked_people.append({
+                'center': (cx, cy),
+                'frames_raised': 1 if hand_raised else 0,
+                'frames_not_raised': 0 if hand_raised else 1,
+                'state': 'raising' if hand_raised else 'idle',
+                'last_progress_time': current_time
+            })
+
+    # Clean up people who haven't been seen for a while
+    tracked_people = [person for person in tracked_people 
+                     if current_time - person.get('last_progress_time', current_time) < 5]
+
+    # Draw visualization
+    raised_hands = 0
+    for person in tracked_people:
+        center = (int(person['center'][0]), int(person['center'][1]))
+        
+        if person['frames_raised'] >= FRAME_THRESHOLD:
+            # Confirmed detection - green circle
+            cv2.circle(frame, center, 20, (0, 255, 0), -1)
+            raised_hands += 1
+            
+            # Show countdown if in countdown state
+            if person['state'] == 'countdown':
+                countdown_remaining = COUNTDOWN_THRESHOLD - person['frames_not_raised']
+                cv2.putText(frame, f"DOWN: {countdown_remaining}", 
+                           (center[0] - 40, center[1] + 40),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        
+        elif person['state'] == 'raising':
+            # Building up to detection - yellow circle with progress
+            cv2.circle(frame, center, 15, (0, 255, 255), 2)
+            progress = f"{person['frames_raised']}/{FRAME_THRESHOLD}"
+            cv2.putText(frame, progress, (center[0] - 20, center[1] - 25),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        
+        else:
+            # Just tracking - small blue dot
+            cv2.circle(frame, center, 5, (255, 0, 0), -1)
+
+    # Show result
+    cv2.putText(frame, f"Raised Hands: {raised_hands}", (10, 50),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
+
+    cv2.imshow("Webcam Hand Raise Detection", frame)
+
+    if cv2.waitKey(5) & 0xFF == 27:  # ESC to exit
+        break
+
+cap.release()
+cv2.destroyAllWindows()
