@@ -1,6 +1,3 @@
-//pip install ultralytics mediapipe filterpy opencv-python
-
-
 import cv2
 import math
 import time
