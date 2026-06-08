@@ -1,5 +1,5 @@
 import cv2
-from src.gesture.detector import HandRaiseDetector
+from src.gesture.detector import HandRaiseDetector, FRAME_THRESHOLD, COUNTDOWN_THRESHOLD
 
 COLORS = {
     'confirmed': (0, 255, 0),    # green
@@ -20,31 +20,32 @@ while cap.isOpened():
 
     raised_count = detector.detect(frame)
 
-    # Draw a circle and label for each tracked person
-    for person in detector.tracked_people:
+    # tracked_people is now a dict: {tracker_id: person_state}
+    for tracker_id, person in detector.tracked_people.items():
         center = (int(person['center'][0]), int(person['center'][1]))
         state = person['state']
         color = COLORS.get(state, (255, 0, 0))
 
         if state == 'confirmed':
-            cv2.circle(frame, center, 20, color, -1)  # filled green
+            cv2.circle(frame, center, 20, color, -1)
+            cv2.putText(frame, f"#{tracker_id}", (center[0] - 12, center[1] - 28),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
         elif state == 'raising':
-            cv2.circle(frame, center, 15, color, 2)   # hollow yellow
-            progress = f"{person['frames_raised']}/60"
-            cv2.putText(frame, progress, (center[0] - 20, center[1] - 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.circle(frame, center, 15, color, 2)
+            progress = f"#{tracker_id} {person['frames_raised']}/{FRAME_THRESHOLD}"
+            cv2.putText(frame, progress, (center[0] - 30, center[1] - 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
 
         elif state == 'countdown':
-            cv2.circle(frame, center, 20, color, 2)   # hollow orange
-            countdown = f"DOWN: {30 - person['frames_not_raised']}"
-            cv2.putText(frame, countdown, (center[0] - 30, center[1] + 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.circle(frame, center, 20, color, 2)
+            remaining = COUNTDOWN_THRESHOLD - person['frames_not_raised']
+            cv2.putText(frame, f"#{tracker_id} down:{remaining}", (center[0] - 30, center[1] + 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
 
         else:
-            cv2.circle(frame, center, 5, color, -1)   # small blue dot
+            cv2.circle(frame, center, 5, color, -1)
 
-    # Show raised hand count
     cv2.putText(frame, f"Raised Hands: {raised_count}", (10, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
 
