@@ -4,7 +4,7 @@ import numpy as np
 from ultralytics import YOLO
 import supervision as sv
 
-FRAME_THRESHOLD = 60
+FRAME_THRESHOLD = 30
 COUNTDOWN_THRESHOLD = 30
 TIMEOUT_SECONDS = 10
 
