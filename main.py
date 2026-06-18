@@ -15,7 +15,10 @@ COLORS = {
 detector = HandRaiseDetector()
 cap = cv2.VideoCapture(0)
 
-print("RaiseIt running — press ESC to quit")
+print("raiseit running — press escape button to exit")
+
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
 
 while cap.isOpened():
     success, frame = cap.read()
