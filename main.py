@@ -1,5 +1,9 @@
 import cv2
-from src.gesture.detector import HandRaiseDetector, FRAME_THRESHOLD, COUNTDOWN_THRESHOLD
+from src.gesture.detector import HandRaiseDetector
+FRAME_THRESHOLD = 30 
+COUNTDOWN_THRESHOLD = 30
+
+
 
 COLORS = {
     'confirmed': (0, 255, 0),    # green
