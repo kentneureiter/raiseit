@@ -9,7 +9,7 @@ COUNTDOWN_THRESHOLD = 30
 TIMEOUT_SECONDS = 10
 RAISE_MARGIN = 0.05
 CONF_THRESHOLD = 0.3
-INPUT_SIZE = 320    #input resolution (once upgrade to jetson --> raise to 640)
+INPUT_SIZE = 640    #input resolution (once upgrade to jetson --> raise to 640)
 
 
 class HandRaiseDetector:
