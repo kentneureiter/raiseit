@@ -1,9 +1,16 @@
 # raiseit
-computer vision system that detects when students raise their hands in classrooms
-we aim to make class participation more seamless by ensuring no hand goes unnoticed
+computer vision system that detects when students raise their hands in classrooms. 
+Aims to make class participation more seamless by ensuring no hand goes unnoticed.
 
-Teach Stack as of now
-1. Ultralytics YOLOv8
-2. MediaPipePose
-3. Python 3.9+
+Currently running on a raspberry pi setup but will be integrating into jetson orin nano soon for higher fps and input resolution to increase accuracy significantly. 
+
+Through my research, I am picking up on some techniques to fine tune CV models and am looking to create a dataset for fine tuning by annotating images on me raising my hand in large lectures around lehigh's campus. 
+
+Packages and Libraries:
+1. Ultralytics
+2. YOLOv8
+3. MediaPipe
+4. 
+5. Python 3.11
+
 Still an early prototype!
